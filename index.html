@@ -1,12 +1,10 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Excellent American Academy | Student Admission Form</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excellent American Academy | Student Admission Form</title>
+    <!-- CSS بتاعك -->
 <style>
   :root{
     --navy-900:#0f2547;
@@ -737,346 +735,46 @@
   </div>
 </div>
 
-<script>
-const form = document.getElementById('admissionForm');
-const toastEl = document.getElementById('toast');
-const ADMIN_PASSCODE = "excellent2026"; // soft gate only — not real security
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-/* ============================================================
-   EMAIL NOTIFICATIONS (EmailJS) — SETUP REQUIRED
-   1) Create a free account at https://www.emailjs.com
-   2) Add an Email Service (Gmail/Outlook/etc) -> copy the SERVICE ID
-   3) Create an Email Template with these variables in the body:
-      {{student_name}} {{ref_number}} {{father_name}} {{father_mobile}}
-      {{mother_name}} {{mother_mobile}} {{submitted_at}} {{parent_email}}
-      -> set "Reply To" field in the template to {{parent_email}} so you
-      can reply straight to the parent from your inbox.
-      -> copy the TEMPLATE ID
-   4) Copy your PUBLIC KEY from Account > General
-   5) Paste all 3 values below, and put the academy's receiving email
-      in ACADEMY_EMAIL (must match the "To Email" field set in your
-      EmailJS template).
-   NOTE: This only sends real emails when the file is hosted on a
-   real website (e.g. Netlify, GitHub Pages) — Claude's own preview
-   sandbox may block the outside connection to EmailJS. The admin
-   panel above always works as a reliable backup regardless.
-============================================================ */
-const EMAILJS_PUBLIC_KEY  = "K8MjKuRsoFKgUzjD5";
-const EMAILJS_SERVICE_ID  = "service_96fupm8";
-const EMAILJS_TEMPLATE_ID = "template_qq7xmth";
-const ACADEMY_EMAIL       = "excellentamericannursery@gmail.com";
-const EMAIL_NOTIFICATIONS_ENABLED = EMAILJS_PUBLIC_KEY !== "YOUR_PUBLIC_KEY";
+        const firebaseConfig = {
+            apiKey: "AIzaSyCszs-NuNMQLDyi-eVvs_yYNKS8DMhbpYU",
+            authDomain: "excellent-academy-admission.firebaseapp.com",
+            projectId: "excellent-academy-admission",
+            storageBucket: "excellent-academy-admission.appspot.com",
+            messagingSenderId: "826611628886",
+            appId: "1:826611628886:web:eed94d8886cf31fc9974f7"
+        };
 
-if(EMAIL_NOTIFICATIONS_ENABLED && window.emailjs){
-  emailjs.init(EMAILJS_PUBLIC_KEY);
-}
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
-async function sendNotificationEmail(data){
-  if(!EMAIL_NOTIFICATIONS_ENABLED || !window.emailjs) return;
-  try{
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: ACADEMY_EMAIL,
-      parent_email: data.parentEmail || '',
-      student_name: data.studentName || '-',
-      ref_number: data.refNumber,
-      father_name: data.fatherName || '-',
-      father_mobile: data.fatherMobile || '-',
-      mother_name: data.motherName || '-',
-      mother_mobile: data.motherMobile || '-',
-      submitted_at: new Date(data.submittedAt).toLocaleString('ar-EG')
-    });
-  }catch(err){
-    console.warn('Email notification failed (submission was still saved):', err);
-  }
-}
+        document.getElementById('admissionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'جاري الحفظ...';
 
-function showToast(msg){
-  toastEl.textContent = msg;
-  toastEl.classList.add('show');
-  setTimeout(()=>toastEl.classList.remove('show'), 3000);
-}
-
-// nationality other toggle
-document.querySelectorAll('input[name="nationality"]').forEach(r=>{
-  r.addEventListener('change', ()=>{
-    document.getElementById('natOtherBox').classList.toggle('show', r.value==='other' && r.checked);
-  });
-});
-
-// generic yes/no detail toggles
-const toggles = [
-  ['repeatedYear','repeatedBox'],
-  ['allergy','allergyBox'],
-  ['medication','medicationBox'],
-  ['disciplinary','disciplinaryBox'],
-  ['iqTest','iqBox'],
-  ['behaviorTest','behaviorBox'],
-];
-toggles.forEach(([name, boxId])=>{
-  document.querySelectorAll('input[name="'+name+'"]').forEach(r=>{
-    r.addEventListener('change', ()=>{
-      document.getElementById(boxId).classList.toggle('show', r.value==='yes' && r.checked);
-    });
-  });
-});
-
-// ---- Required document attachments ----
-const DOC_KEYS = ['birth','ids','photo','health','success','iq','behavior','lang'];
-const MAX_FILE_BYTES = 3 * 1024 * 1024; // 3MB
-const attachments = {}; // docKey -> {name, type, size, dataUrl}
-
-function formatSize(bytes){
-  if(bytes < 1024) return bytes + ' B';
-  if(bytes < 1024*1024) return (bytes/1024).toFixed(0) + ' KB';
-  return (bytes/1024/1024).toFixed(1) + ' MB';
-}
-
-DOC_KEYS.forEach(docKey=>{
-  const toggle = document.querySelector('.doc-toggle[data-doc="'+docKey+'"]');
-  const box = document.getElementById('attach-'+docKey);
-  const btn = document.querySelector('.upload-btn[data-doc="'+docKey+'"]');
-  const fileInput = document.getElementById('file-'+docKey);
-  const preview = document.getElementById('preview-'+docKey);
-  const warn = document.getElementById('warn-'+docKey);
-  const item = document.querySelector('.doc-item[data-doc="'+docKey+'"]');
-
-  toggle.addEventListener('change', ()=>{
-    box.classList.toggle('show', toggle.checked);
-    item.classList.remove('doc-invalid');
-    if(!toggle.checked){
-      delete attachments[docKey];
-      fileInput.value = '';
-      preview.classList.remove('show');
-      preview.innerHTML = '';
-    }
-  });
-
-  btn.addEventListener('click', ()=> fileInput.click());
-
-  fileInput.addEventListener('change', ()=>{
-    const f = fileInput.files[0];
-    warn.classList.remove('show');
-    if(!f) return;
-    if(f.size > MAX_FILE_BYTES){
-      warn.classList.add('show');
-      fileInput.value = '';
-      delete attachments[docKey];
-      preview.classList.remove('show');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      attachments[docKey] = { name: f.name, type: f.type, size: f.size, dataUrl: reader.result };
-      const isImage = f.type.startsWith('image/');
-      preview.innerHTML = `
-        ${isImage ? `<img class="fp-thumb" src="${reader.result}">` : `<span style="font-size:20px;">📄</span>`}
-        <span>${f.name} · ${formatSize(f.size)}</span>
-      `.trim();
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'fp-remove';
-      removeBtn.textContent = '×';
-      removeBtn.addEventListener('click', ()=>{
-        delete attachments[docKey];
-        fileInput.value = '';
-        preview.classList.remove('show');
-        preview.innerHTML = '';
-      });
-      const wrap = document.createElement('div');
-      wrap.className = 'fp-info';
-      wrap.innerHTML = preview.innerHTML;
-      preview.innerHTML = '';
-      preview.appendChild(wrap);
-      preview.appendChild(removeBtn);
-      preview.classList.add('show');
-      item.classList.remove('doc-invalid');
-    };
-    reader.readAsDataURL(f);
-  });
-});
-
-function validateDocuments(){
-  let ok = true;
-  let firstInvalid = null;
-  DOC_KEYS.forEach(docKey=>{
-    const toggle = document.querySelector('.doc-toggle[data-doc="'+docKey+'"]');
-    const item = document.querySelector('.doc-item[data-doc="'+docKey+'"]');
-    const valid = toggle.checked && attachments[docKey];
-    item.classList.toggle('doc-invalid', !valid);
-    if(!valid){ ok = false; if(!firstInvalid) firstInvalid = item; }
-  });
-  if(firstInvalid) firstInvalid.scrollIntoView({behavior:'smooth', block:'center'});
-  return ok;
-}
-
-// national id auto-advance
-const nidInputs = document.querySelectorAll('#nidStudent input');
-nidInputs.forEach((inp, idx)=>{
-  inp.addEventListener('input', ()=>{
-    inp.value = inp.value.replace(/[^0-9]/g,'');
-    if(inp.value && idx < nidInputs.length-1) nidInputs[idx+1].focus();
-  });
-  inp.addEventListener('keydown', (e)=>{
-    if(e.key==='Backspace' && !inp.value && idx>0) nidInputs[idx-1].focus();
-  });
-});
-
-// section nav active state
-const navLinks = document.querySelectorAll('#navScroll a');
-const cards = document.querySelectorAll('.card');
-window.addEventListener('scroll', ()=>{
-  let current = cards[0]?.id;
-  cards.forEach(c=>{ if(window.scrollY + 100 >= c.offsetTop) current = c.id; });
-  navLinks.forEach(l=> l.classList.toggle('active', l.getAttribute('href') === '#'+current));
-}, {passive:true});
-
-function validate(){
-  let ok = true;
-  let firstInvalid = null;
-  document.querySelectorAll('[data-req]').forEach(f=>{
-    const input = f.querySelector('input[required], textarea[required]');
-    const radios = f.querySelectorAll('input[type=radio][required]');
-    let fieldOk = true;
-    if(input){ fieldOk = input.value.trim().length > 0; }
-    else if(radios.length){ fieldOk = Array.from(radios).some(r=>r.checked); }
-    f.classList.toggle('invalid', !fieldOk);
-    if(!fieldOk){ ok = false; if(!firstInvalid) firstInvalid = f; }
-  });
-  if(!document.getElementById('agreeBox').checked){
-    ok = false;
-    showToast('برجاء الموافقة على الإقرار قبل الإرسال');
-  }
-  if(firstInvalid) firstInvalid.scrollIntoView({behavior:'smooth', block:'center'});
-  return ok;
-}
-
-function genRef(){
-  const d = new Date();
-  return 'EAA-' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '-' + Math.floor(1000+Math.random()*9000);
-}
-
-form.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const fieldsOk = validate();
-  const docsOk = validateDocuments();
-  if(!fieldsOk || !docsOk){
-    showToast(!docsOk ? 'برجاء إرفاق جميع المستندات المطلوبة (باللون الأحمر)' : 'برجاء مراجعة الحقول المطلوبة (باللون الأحمر)');
-    if(fieldsOk && !docsOk) document.getElementById('sec-docs').scrollIntoView({behavior:'smooth', block:'start'});
-    return;
-  }
-  const submitBtn = document.getElementById('submitBtn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'جاري رفع المستندات والإرسال...';
-
-  const data = {};
-  new FormData(form).forEach((v,k)=>{ data[k] = v; });
-  data.studentNationalID = Array.from(nidInputs).map(i=>i.value).join('');
-  const ref = genRef();
-  data.refNumber = ref;
-  data.submittedAt = new Date().toISOString();
-  data.documents = DOC_KEYS.map(k=>({
-    key:k,
-    name: attachments[k].name,
-    type: attachments[k].type,
-    size: attachments[k].size
-  }));
-
-  try{
-    // store each attachment under its own key to stay under per-key size limits
-    for(const docKey of DOC_KEYS){
-      await window.storage.set('attachment:'+ref+':'+docKey, JSON.stringify(attachments[docKey]), true);
-    }
-    await window.storage.set('submission:'+ref, JSON.stringify(data), true);
-    sendNotificationEmail(data); // best-effort, does not block success screen
-    document.getElementById('refNumberDisplay').textContent = ref;
-    form.style.display = 'none';
-    document.querySelector('.nav-wrap').style.display='none';
-    document.getElementById('successScreen').style.display = 'block';
-    window.scrollTo({top:0, behavior:'smooth'});
-  }catch(err){
-    console.error(err);
-    showToast('حدث خطأ أثناء رفع المستندات، برجاء المحاولة مرة أخرى (تأكد من حجم الملفات)');
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'إرسال الطلب — Submit Application';
-  }
-});
-
-// ---- Admin panel ----
-const adminOverlay = document.getElementById('adminOverlay');
-document.getElementById('adminBtn').addEventListener('click', ()=>{ adminOverlay.classList.add('show'); });
-document.getElementById('closeAdmin').addEventListener('click', ()=>{ adminOverlay.classList.remove('show'); });
-
-document.getElementById('passSubmit').addEventListener('click', async ()=>{
-  const val = document.getElementById('adminPass').value;
-  if(val !== ADMIN_PASSCODE){
-    showToast('كلمة مرور غير صحيحة');
-    return;
-  }
-  document.getElementById('passRow').style.display='none';
-  document.getElementById('adminContent').style.display='block';
-  await loadSubmissions();
-});
-
-async function loadSubmissions(){
-  const listEl = document.getElementById('subList');
-  listEl.innerHTML = '<p style="font-size:12.5px;color:var(--ink-500);">جاري التحميل...</p>';
-  try{
-    const res = await window.storage.list('submission:', true);
-    const keys = res?.keys || [];
-    if(keys.length === 0){
-      listEl.innerHTML = '<div class="empty-state">لا توجد طلبات مرسلة بعد</div>';
-      return;
-    }
-    const items = [];
-    for(const k of keys){
-      try{
-        const r = await window.storage.get(k, true);
-        if(r) items.push(JSON.parse(r.value));
-      }catch(e){}
-    }
-    items.sort((a,b)=> (b.submittedAt||'').localeCompare(a.submittedAt||''));
-    const docLabels = {birth:'شهادة ميلاد', ids:'بطاقات ولي الأمر', photo:'صورة شخصية', health:'البطاقة الصحية', success:'بيان نجاح', iq:'اختبار IQ', behavior:'اختبار سلوك', lang:'اختبار لغة'};
-
-    const rows = await Promise.all(items.map(async it => {
-      let docsHtml = '<span style="color:var(--ink-500);">لا توجد مستندات</span>';
-      if(Array.isArray(it.documents) && it.documents.length){
-        const links = await Promise.all(it.documents.map(async d => {
-          try{
-            const r = await window.storage.get('attachment:'+it.refNumber+':'+d.key, true);
-            const att = r ? JSON.parse(r.value) : null;
-            if(!att) return `<span style="color:var(--ink-500);">${docLabels[d.key]||d.key}: غير متوفر</span>`;
-            return `<a href="${att.dataUrl}" download="${att.name}" style="color:var(--blue-500);font-weight:700;text-decoration:none;">📎 ${docLabels[d.key]||d.key}</a>`;
-          }catch(e){ return `<span style="color:var(--ink-500);">${docLabels[d.key]||d.key}: خطأ في التحميل</span>`; }
-        }));
-        docsHtml = links.join(' &nbsp;·&nbsp; ');
-      }
-      return `
-      <details class="sub-row">
-        <summary><span>${it.studentName || '(بدون اسم)'} — ${it.refNumber}</span><span>${new Date(it.submittedAt).toLocaleString('ar-EG')}</span></summary>
-        <div class="kv">
-          <b>تاريخ الميلاد</b><span>${it.dob||'-'}</span>
-          <b>الجنس</b><span>${it.gender||'-'}</span>
-          <b>الرقم القومي</b><span class="en">${it.studentNationalID||'-'}</span>
-          <b>اسم الأب</b><span>${it.fatherName||'-'}</span>
-          <b>موبايل الأب</b><span class="en">${it.fatherMobile||'-'}</span>
-          <b>اسم الأم</b><span>${it.motherName||'-'}</span>
-          <b>موبايل الأم</b><span class="en">${it.motherMobile||'-'}</span>
-          <b>البريد الإلكتروني</b><span class="en">${it.parentEmail||'-'}</span>
-          <b>العنوان</b><span>${it.address||'-'}</span>
-          <b>توقيع ولي الأمر</b><span>${it.signature||'-'}</span>
-          <b>تاريخ التوقيع</b><span>${it.signDate||'-'}</span>
-        </div>
-        <div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); display:flex; flex-wrap:wrap; gap:10px; font-size:12.5px;">
-          ${docsHtml}
-        </div>
-      </details>
-    `;
-    }));
-    listEl.innerHTML = rows.join('');
-  }catch(err){
-    listEl.innerHTML = '<div class="empty-state">تعذر تحميل الطلبات</div>';
-  }
-}
-</script>
+            try {
+                const formData = new FormData(document.getElementById('admissionForm'));
+                const data = Object.fromEntries(formData.entries());
+                
+                await addDoc(collection(db, "applications"), {
+                    ...data,
+                    submittedAt: new Date().toISOString()
+                });
+                
+                alert('تم التقديم بنجاح!');
+                document.getElementById('admissionForm').reset();
+            } catch (err) {
+                alert('خطأ في الاتصال بالسيرفر');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'إرسال الطلب — Submit Application';
+            }
+        });
+    </script>
 </body>
 </html>
